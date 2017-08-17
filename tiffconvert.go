@@ -10,24 +10,44 @@ import (
 	"golang.org/x/image/tiff"
 	"bytes"
 	"image/jpeg"
+	"flag"
+	"sync"
+	"runtime"
+	"fmt"
 )
 
 var queue chan convertJob
 var scanPrefix string
 var convertPrefix string
 
+var wg sync.WaitGroup
+
 type convertJob struct{
 	tiffPath, jpegPath string
 }
 
 func main() {
+
+	scanPrefixL := flag.String("tiff", "./", "path to the folder with tiffs")
+	convertPrefixL := flag.String("jpeg", "./converted/", "path to the folder with the converted jpegs")
+
+	flag.Parse()
+
+	scanPrefix = *scanPrefixL
+	convertPrefix = *convertPrefixL
 	queue = make(chan convertJob, 10)
+
+	for i := 0; i<runtime.NumCPU() ; i++  {
+		go converter(queue)
+	}
 
 	err := filepath.Walk(scanPrefix, walked)
 	if err != nil {
 		log.Printf("error walking")
 	}
 
+
+	wg.Wait()
 
 
 }
@@ -49,10 +69,12 @@ func converter(receiver chan convertJob){
 		if err != nil {
 			log.Printf("could not encode %v", err)
 		}
-		err = ioutil.WriteFile(job.jpegPath, buf.Bytes(), 777)
+		err = ioutil.WriteFile(job.jpegPath, buf.Bytes(), os.ModePerm)
 		if err != nil {
 			log.Printf("could not write file %v", err)
 		}
+		fmt.Println(job)
+		wg.Done()
 
 	}
 }
@@ -62,25 +84,43 @@ func converter(receiver chan convertJob){
 
 
 func walked(walkedpath string, info os.FileInfo, err error) error {
-	jpegpath := path.Join(convertPrefix, string(walkedpath[len(scanPrefix)]))
+	jpegpath := path.Join(convertPrefix, string(walkedpath[len(scanPrefix):]))
 	if strings.HasPrefix(walkedpath, convertPrefix){
 		return filepath.SkipDir
 	}
-	if !strings.HasSuffix(walkedpath, ".tiff") || !strings.HasSuffix(walkedpath, ".tif"){
+	if strings.HasSuffix(walkedpath, ".tiff") {
+		jpegpath = jpegpath[:len(jpegpath)-4]+"jpg"
+	}else if strings.HasSuffix(walkedpath, ".tif"){
+		jpegpath = jpegpath[:len(jpegpath)-3]+"jpg"
+	} else{
 		return nil
 	}
-	err2 := checkConverted(walkedpath, jpegpath)
+
+
+	converted, err2 := checkConvertedAndCreateFolder(walkedpath, jpegpath)
 	if err2 != nil {
 		log.Printf("%v check said %v", walkedpath, err2)
 	}
-
-	queue<- convertJob{tiffPath: walkedpath, jpegPath:jpegpath}
-
+	if !converted {
+		wg.Add(1)
+		queue <- convertJob{tiffPath: walkedpath, jpegPath: jpegpath}
+	}
 
 	return nil
 }
 
-func checkConverted(tiffPath, jpegPath string) error{
+func checkConvertedAndCreateFolder(tiffPath, jpegPath string) (bool, error){
 
-	return nil
+	if _, err := os.Stat(jpegPath); !os.IsNotExist(err) {
+		return true, nil
+
+	}
+	dir := filepath.Dir(jpegPath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err := os.MkdirAll(filepath.Dir(jpegPath), os.ModePerm)
+		if err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
