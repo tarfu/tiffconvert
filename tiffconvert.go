@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"log"
 	"strings"
-	"path"
 	"io/ioutil"
 	"golang.org/x/image/tiff"
 	"bytes"
@@ -28,8 +27,8 @@ type convertJob struct{
 
 func main() {
 
-	scanPrefixL := flag.String("tiff", "./", "path to the folder with tiffs")
-	convertPrefixL := flag.String("jpeg", "./converted/", "path to the folder with the converted jpegs")
+	scanPrefixL := flag.String("tiff", ".", "path to the folder with tiffs")
+	convertPrefixL := flag.String("jpeg", "converted", "path to the folder with the converted jpegs")
 
 	flag.Parse()
 
@@ -84,7 +83,7 @@ func converter(receiver chan convertJob){
 
 
 func walked(walkedpath string, info os.FileInfo, err error) error {
-	jpegpath := path.Join(convertPrefix, string(walkedpath[len(scanPrefix):]))
+	jpegpath := filepath.Join(convertPrefix, string(walkedpath[len(scanPrefix):]))
 	if strings.HasPrefix(walkedpath, convertPrefix){
 		return filepath.SkipDir
 	}
