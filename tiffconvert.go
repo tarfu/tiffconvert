@@ -32,8 +32,8 @@ func main() {
 
 	flag.Parse()
 
-	scanPrefix = *scanPrefixL
-	convertPrefix = *convertPrefixL
+	scanPrefix = filepath.Clean(*scanPrefixL)
+	convertPrefix = filepath.Clean(*convertPrefixL)
 	queue = make(chan convertJob, 10)
 
 	for i := 0; i<runtime.NumCPU() ; i++  {
@@ -83,7 +83,7 @@ func converter(receiver chan convertJob){
 
 
 func walked(walkedpath string, info os.FileInfo, err error) error {
-	jpegpath := filepath.Join(convertPrefix, string(walkedpath[len(scanPrefix):]))
+	jpegpath := filepath.Join(convertPrefix, string(walkedpath[len(scanPrefix)-1:]))
 	if strings.HasPrefix(walkedpath, convertPrefix){
 		return filepath.SkipDir
 	}
